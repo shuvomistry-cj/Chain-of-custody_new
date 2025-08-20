@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+sqlalchemy>=2.0
+pydantic>=2
+python-multipart
+passlib[argon2]
+python-jose[cryptography]
+cryptography
+python-dotenv
+requests

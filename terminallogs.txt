@@ -1,0 +1,404 @@
+PS D:\Chain of custody_new> & "d:/Chain of custody_new/.venv/Scripts/Activate.ps1"
+(.venv) PS D:\Chain of custody_new> curl -X POST http://127.0.0.1:8000/auth/login -H "Content-Type: application/json" -d "{\"email\":\"collector@demo.com\",\"password\":\"demo123\"}"
+Invoke-WebRequest : Cannot bind parameter 'Headers'. Cannot convert the "Content-Type: 
+application/json" value of type "System.String" to type "System.Collections.IDictionary".
+At line:1 char:50
++ ... 127.0.0.1:8000/auth/login -H "Content-Type: application/json" -d "{\" ...
++                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidArgument: (:) [Invoke-WebRequest], ParameterBindingException
+    + FullyQualifiedErrorId : CannotConvertArgumentNoMessage,Microsoft.PowerShell.Commands.InvokeWeb 
+   RequestCommand
+ 
+(.venv) PS D:\Chain of custody_new> powershell -NoProfile -Command "$resp = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/auth/login -ContentType 'application/json' -Body '{"email":"shuvomistry.nfsu@gmail.com","password":"shuvomitro339"}'; Write-Output ('ADMIN_TOKEN=' + $resp.access_token)"
+At line:1 char:203
++ ... .com,password:shuvomitro339}'; Write-Output ('ADMIN_TOKEN=' + .access ...
++                                                                  ~
+You must provide a value expression following the '+' operator.
+At line:1 char:204
++ ... ssword:shuvomitro339}'; Write-Output ('ADMIN_TOKEN=' + .access_token)
++                                                            ~~~~~~~~~~~~~
+Unexpected token '.access_token' in expression or statement.
+At line:1 char:203
++ ... .com,password:shuvomitro339}'; Write-Output ('ADMIN_TOKEN=' + .access ...
++                                                                  ~
+Missing closing ')' in expression.
+At line:1 char:217
++ ... ssword:shuvomitro339}'; Write-Output ('ADMIN_TOKEN=' + .access_token)
++                                                                         ~
+Unexpected token ')' in expression or statement.
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : ExpectedValueExpression
+
+(.venv) PS D:\Chain of custody_new> $admin = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/auth/login -ContentType 'application/json' -Body '{ "email": "shuvomistry.nfsu@gmail.com", "password": "shuvomitro339" }'
+>> $env:ADMIN_TOKEN = $admin.access_token; "ADMIN_TOKEN=$($env:ADMIN_TOKEN)"
+ADMIN_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzU1NzE0MTYxLCJ0eXBlIjoiYWNjZXNzIn0.IhvqZrQJQblBPkmhS3OltZedzwe6dfxzP_5ToiyVcRI
+(.venv) PS D:\Chain of custody_new> $collectorUser = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/auth/register -Headers @{ Authorization = "Bearer $env:ADMIN_TOKEN" } -ContentType 'application/json' -Body (@{name='John Collector'; email='collector@demo.com'; role='COLLECTOR'; password='demo123'} | ConvertTo-Json)
+>> $analystUser   = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/auth/register -Headers @{ Authorization = "Bearer $env:ADMIN_TOKEN" } -ContentType 'application/json' -Body (@{name='Jane Analyst';  email='analyst@demo.com';  role='ANALYST';  password='demo123'} | ConvertTo-Json)
+>>
+>> "Collector ID=$($collectorUser.id)"; "Analyst ID=$($analystUser.id)"
+Collector ID=2
+Analyst ID=3
+(.venv) PS D:\Chain of custody_new> $collectorLogin = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/auth/login -ContentType 'application/json' -Body '{ "email": "collector@demo.com", "password": "demo123" }'
+>> $env:COLLECTOR_TOKEN = $collectorLogin.access_token; "COLLECTOR_TOKEN=$($env:COLLECTOR_TOKEN)"     
+COLLECTOR_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZXhwIjoxNzU1NzE0MTgwLCJ0eXBlIjoiYWNjZXNzIn0.y5H6hsjMCPRT8D-yStQxJJGbJ7pwHPvO9i-lI8Gph_o
+(.venv) PS D:\Chain of custody_new> curl.exe -X POST http://127.0.0.1:8000/evidence/ ^
+>>   -H "Authorization: Bearer $env:COLLECTOR_TOKEN" ^
+>>   -F "agency=Demo PD" ^
+>>   -F "case_no=2024-001" ^
+>>   -F "offense=Fraud" ^
+>>   -F "item_no=001" ^
+>>   -F "badge_no=12345" ^
+>>   -F "location=123 Main St" ^
+>>   -F "collected_at=2024-01-15T10:30:00Z" ^
+>>   -F "description=Seized laptop" ^
+>>   -F "files=@README.md;type=text/plain"
+{"detail":"Not authenticated"}curl: (3) URL rejected: Bad hostname
+-H : The term '-H' is not recognized as the name of a cmdlet, function, script file, or operable 
+program. Check the spelling of the name, or if a path was included, verify that the path is correct   
+and try again.
+At line:2 char:3
++   -H "Authorization: Bearer $env:COLLECTOR_TOKEN" ^
++   ~~
+    + CategoryInfo          : ObjectNotFound: (-H:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+-F : The term '-F' is not recognized as the name of a cmdlet, function, script file, or operable 
+program. Check the spelling of the name, or if a path was included, verify that the path is correct   
+and try again.
+At line:3 char:3
++   -F "agency=Demo PD" ^
++   ~~
+    + CategoryInfo          : ObjectNotFound: (-F:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+-F : The term '-F' is not recognized as the name of a cmdlet, function, script file, or operable 
+program. Check the spelling of the name, or if a path was included, verify that the path is correct   
+and try again.
+At line:4 char:3
++   -F "case_no=2024-001" ^
++   ~~
+    + CategoryInfo          : ObjectNotFound: (-F:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+-F : The term '-F' is not recognized as the name of a cmdlet, function, script file, or operable 
+program. Check the spelling of the name, or if a path was included, verify that the path is correct   
+and try again.
+At line:5 char:3
++   -F "offense=Fraud" ^
++   ~~
+    + CategoryInfo          : ObjectNotFound: (-F:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+-F : The term '-F' is not recognized as the name of a cmdlet, function, script file, or operable 
+program. Check the spelling of the name, or if a path was included, verify that the path is correct   
+and try again.
+At line:6 char:3
++   -F "item_no=001" ^
++   ~~
+    + CategoryInfo          : ObjectNotFound: (-F:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+-F : The term '-F' is not recognized as the name of a cmdlet, function, script file, or operable 
+program. Check the spelling of the name, or if a path was included, verify that the path is correct   
+and try again.
+At line:7 char:3
++   -F "badge_no=12345" ^
++   ~~
+    + CategoryInfo          : ObjectNotFound: (-F:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+-F : The term '-F' is not recognized as the name of a cmdlet, function, script file, or operable 
+program. Check the spelling of the name, or if a path was included, verify that the path is correct   
+and try again.
+At line:8 char:3
++   -F "location=123 Main St" ^
++   ~~
+    + CategoryInfo          : ObjectNotFound: (-F:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+-F : The term '-F' is not recognized as the name of a cmdlet, function, script file, or operable 
+program. Check the spelling of the name, or if a path was included, verify that the path is correct   
+and try again.
+At line:9 char:3
++   -F "collected_at=2024-01-15T10:30:00Z" ^
++   ~~
+    + CategoryInfo          : ObjectNotFound: (-F:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+-F : The term '-F' is not recognized as the name of a cmdlet, function, script file, or operable 
+program. Check the spelling of the name, or if a path was included, verify that the path is correct   
+and try again.
+At line:10 char:3
++   -F "description=Seized laptop" ^
++   ~~
+    + CategoryInfo          : ObjectNotFound: (-F:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+-F : The term '-F' is not recognized as the name of a cmdlet, function, script file, or operable 
+program. Check the spelling of the name, or if a path was included, verify that the path is correct   
+and try again.
+At line:11 char:3
++   -F "files=@README.md;type=text/plain"
++   ~~
+    + CategoryInfo          : ObjectNotFound: (-F:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+(.venv) PS D:\Chain of custody_new> curl.exe -X POST "http://127.0.0.1:8000/evidence/" -H "Authorization: Bearer $env:COLLECTOR_TOKEN" -F "agency=Demo PD" -F "case_no=2024-001" -F "offense=Fraud" -F "item_no=001" -F "badge_no=12345" -F "location=123 Main St" -F "collected_at=2024-01-15T10:30:00Z" -F "description=Seized laptop" -F "files=@README.md;type=text/plain"
+{"id":1,"evidence_id_str":"Demo PD-2024-001-001","agency":"Demo PD","case_no":"2024-001","offense":"Fraud","item_no":"001","collected_by_user_id":2,"badge_no":"12345","location":"123 Main St","collected_at_utc":"2024-01-15T10:30:00","description":"Seized laptop","created_at_utc":"2025-08-20T17:54:04","files":[{"id":1,"orig_filename":"README.md","mime":"text/plain","size_bytes":5512,"sha256_hex":"09ccc6191d042f293e250bc98abf5c1b10714a3d1e9a314dcb3167aa8d621284","created_at_utc":"2025-08-20T17:54:04"}],"current_custodian_name":"John Collector","current_custodian_id":2}
+(.venv) PS D:\Chain of custody_new> $evidences = Invoke-RestMethod -Uri 'http://127.0.0.1:8000/evidence' -Headers @{ Authorization = "Bearer $env:COLLECTOR_TOKEN" }
+>> $evidenceId = $evidences[0].id
+>> $fileId = $evidences[0].files[0].id
+>> "Evidence ID=$evidenceId; File ID=$fileId"
+Invoke-RestMethod : {"detail":"Not authenticated"}
+At line:1 char:14
++ ... evidences = Invoke-RestMethod -Uri 'http://127.0.0.1:8000/evidence' - ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (System.Net.HttpWebRequest:HttpWebRequest) [Invoke-R  
+   estMethod], WebException
+    + FullyQualifiedErrorId : WebCmdletWebResponseException,Microsoft.PowerShell.Commands.InvokeRest  
+   MethodCommand
+Cannot index into a null array.
+At line:2 char:1
++ $evidenceId = $evidences[0].id
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (:) [], RuntimeException
+    + FullyQualifiedErrorId : NullArray
+
+Cannot index into a null array.
+At line:3 char:1
++ $fileId = $evidences[0].files[0].id
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (:) [], RuntimeException
+    + FullyQualifiedErrorId : NullArray
+
+Evidence ID=; File ID=
+(.venv) PS D:\Chain of custody_new> # Reuse your existing COLLECTOR token
+>> $evidences = Invoke-RestMethod -Uri 'http://127.0.0.1:8000/evidence/' -Headers @{ Authorization = "Bearer $env:COLLECTOR_TOKEN" }
+>> $evidenceId = $evidences[0].id
+>> $fileId = $evidences[0].files[0].id
+>> "Evidence ID=$evidenceId; File ID=$fileId"
+Cannot index into a null array.
+At line:4 char:1
++ $fileId = $evidences[0].files[0].id
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (:) [], RuntimeException
+    + FullyQualifiedErrorId : NullArray
+
+Evidence ID=; File ID=
+(.venv) PS D:\Chain of custody_new> # Reuse your existing COLLECTOR token
+>> $evidences = Invoke-RestMethod -Uri 'http://127.0.0.1:8000/evidence/' -Headers @{ Authorization = "Bearer $env:COLLECTOR_TOKEN" }
+>> $evidenceId = $evidences[1].id
+>> $fileId = $evidences[1].files[1].id
+>> "Evidence ID=$evidenceId; File ID=$fileId"
+Cannot index into a null array.
+At line:4 char:1
++ $fileId = $evidences[1].files[1].id
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (:) [], RuntimeException
+    + FullyQualifiedErrorId : NullArray
+
+Evidence ID=; File ID=
+(.venv) PS D:\Chain of custody_new> $evidences = Invoke-RestMethod -Uri 'http://127.0.0.1:8000/evidence/' -Headers @{ Authorization = "Bearer $env:COLLECTOR_TOKEN" }
+>> "RAW EVIDENCES:"; $evidences | ConvertTo-Json -Depth 6
+>>
+>> $ev = @($evidences)[0]  # coerce to array, then take first
+>> $evidenceId = $ev.id
+>> $fileId = @($ev.files)[0].id
+>> "Evidence ID=$evidenceId; File ID=$fileId"
+RAW EVIDENCES:
+{
+    "items":  [
+                  {
+                      "id":  1,
+                      "evidence_id_str":  "Demo PD-2024-001-001",
+                      "agency":  "Demo PD",
+                      "case_no":  "2024-001",
+                      "offense":  "Fraud",
+                      "item_no":  "001",
+                      "collected_by_user_id":  2,
+                      "badge_no":  "12345",
+                      "location":  "123 Main St",
+                      "collected_at_utc":  "2024-01-15T10:30:00",
+                      "description":  "Seized laptop",
+                      "created_at_utc":  "2025-08-20T17:54:04",
+                      "files":  [
+                                    {
+                                        "id":  1,
+                                        "orig_filename":  "README.md",
+                                        "mime":  "text/plain",
+                                        "size_bytes":  5512,
+                                        "sha256_hex":  "09ccc6191d042f293e250bc98abf5c1b10714a3d1e9a314dcb3167aa8d621284",
+                                        "created_at_utc":  "2025-08-20T17:54:04"
+                                    }
+                                ],
+                      "current_custodian_name":  "John Collector",
+                      "current_custodian_id":  2
+                  }
+              ],
+    "total":  1,
+    "page":  1,
+    "per_page":  20
+}
+Evidence ID=; File ID=
+(.venv) PS D:\Chain of custody_new> $evidences = Invoke-RestMethod -Uri 'http://127.0.0.1:8000/evidence/' -Headers @{ Authorization = "Bearer $env:COLLECTOR_TOKEN" }
+>> $ev = $evidences.items[0]
+>> $evidenceId = $ev.id
+>> $fileId = $ev.files[0].id
+>> "Evidence ID=$evidenceId; File ID=$fileId"
+Evidence ID=1; File ID=1
+(.venv) PS D:\Chain of custody_new> $transfer = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8000/transfer/request' `
+>>   -Headers @{ Authorization = "Bearer $env:COLLECTOR_TOKEN" } `
+>>   -ContentType 'application/json' `
+>>   -Body (@{ evidence_id = $evidenceId; to_user_id = 3; reason = 'To lab' } | ConvertTo-Json)       
+>> "Transfer ID=$($transfer.id)"
+Transfer ID=1
+(.venv) PS D:\Chain of custody_new> $analystLogin = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/auth/login -ContentType 'application/json' -Body '{ "email": "analyst@demo.com", "password": "demo123" }'
+>> $env:ANALYST_TOKEN = $analystLogin.access_token
+>> "ANALYST_TOKEN=$($env:ANALYST_TOKEN)"
+>>
+>> Invoke-RestMethod -Method Post -Uri ("http://127.0.0.1:8000/transfer/accept/" + $transfer.id) -Headers @{ Authorization = "Bearer $env:ANALYST_TOKEN" }
+ANALYST_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzIiwiZXhwIjoxNzU1NzE0Njk3LCJ0eXBlIjoiYWNjZXNzIn0.POuiI0rIh4HbVvB39HdkheBK8zCTfHeIV7ZpJXvD-1g
+
+
+id               : 1
+evidence_id      : 1
+from_user_id     : 2
+to_user_id       : 3
+reason           : To lab
+requested_at_utc : 2025-08-20T18:01:21
+accepted_at_utc  : 2025-08-20T18:01:37.600048
+status           : ACCEPTED
+from_user_name   : John Collector
+to_user_name     : Jane Analyst
+evidence_id_str  : Demo PD-2024-001-001
+
+
+
+(.venv) PS D:\Chain of custody_new> curl.exe -L -o downloaded.bin -H "Authorization: Bearer $env:ANALYST_TOKEN" ("http://127.0.0.1:8000/evidence/" + $evidenceId + "/download/" + $fileId)
+>> Get-Item .\downloaded.bin | Select-Object Name,Length,LastWriteTime
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100  5512    0  5512    0     0  49472      0 --:--:-- --:--:-- --:--:-- 49657
+
+Name           Length LastWriteTime
+----           ------ -------------
+downloaded.bin   5512 8/21/2025 12:02:02 AM
+
+
+(.venv) PS D:\Chain of custody_new> Invoke-RestMethod -Uri ("http://127.0.0.1:8000/audit/" + $evidenceId) -Headers @{ Authorization = "Bearer $env:ANALYST_TOKEN" } | ConvertTo-Json -Depth 6
+>> Invoke-RestMethod -Uri ("http://127.0.0.1:8000/audit/" + $evidenceId + "/verify") -Headers @{ Authorization = "Bearer $env:ANALYST_TOKEN" }
+{
+    "evidence_id":  1,
+    "evidence_id_str":  "Demo PD-2024-001-001",
+    "audit_entries":  [
+                          {
+                              "id":  1,
+                              "evidence_id":  1,
+                              "actor_user_id":  2,
+                              "actor_name":  "John Collector",
+                              "action":  "EVIDENCE_CREATED",
+                              "details":  {
+                                              "action":  "EVIDENCE_CREATED",
+                                              "evidence_id_str":  "Demo PD-2024-001-001",
+                                              "files":  [
+                                                            {
+                                                                "filename":  "README.md",
+                                                                "size_bytes":  5512,
+                                                                "sha256":  "09ccc6191d042f293e250bc98abf5c1b10714a3d1e9a314dcb3167aa8d621284",
+                                                                "mime":  "text/plain"
+                                                            }
+                                                        ],
+                                              "created_by":  "John Collector"
+                                          },
+                              "ts_utc":  "2025-08-20T17:54:04",
+                              "prev_hash_hex":  "",
+                              "entry_hash_hex":  "b8aabf1b0cc5426381c8cede46a6e7a8947f729a7d2dfef52f0cf928ed7a62c2"
+                          },
+                          {
+                              "id":  2,
+                              "evidence_id":  1,
+                              "actor_user_id":  2,
+                              "actor_name":  "John Collector",
+                              "action":  "TRANSFER_REQUESTED",
+                              "details":  {
+                                              "action":  "TRANSFER_REQUESTED",
+                                              "transfer_id":  1,
+                                              "from_user":  "John Collector",
+                                              "to_user":  "Jane Analyst",
+                                              "reason":  "To lab"
+                                          },
+                              "ts_utc":  "2025-08-20T18:01:21",
+                              "prev_hash_hex":  "b8aabf1b0cc5426381c8cede46a6e7a8947f729a7d2dfef52f0cf928ed7a62c2",
+                              "entry_hash_hex":  "1b2aba4c35b41a2af25d0f8b8703750866d494e01c759fc0eb609c54763f3047"
+                          },
+                          {
+                              "id":  3,
+                              "evidence_id":  1,
+                              "actor_user_id":  3,
+                              "actor_name":  "Jane Analyst",
+                              "action":  "TRANSFER_ACCEPTED",
+                              "details":  {
+                                              "action":  "TRANSFER_ACCEPTED",
+                                              "transfer_id":  1,
+                                              "from_user":  "John Collector",
+                                              "to_user":  "Jane Analyst",
+                                              "reason":  "To lab"
+                                          },
+                              "ts_utc":  "2025-08-20T18:01:37",
+                              "prev_hash_hex":  "1b2aba4c35b41a2af25d0f8b8703750866d494e01c759fc0eb609c54763f3047",
+                              "entry_hash_hex":  "28e4df2efbbb06b4440dbe0349d0ca1fa6026275fa3bf620dcf778d5b8cdac86"
+                          },
+                          {
+                              "id":  4,
+                              "evidence_id":  1,
+                              "actor_user_id":  3,
+                              "actor_name":  "Jane Analyst",
+                              "action":  "FILE_DOWNLOADED",
+                              "details":  {
+                                              "action":  "FILE_DOWNLOADED",
+                                              "file_id":  1,
+                                              "filename":  "README.md",
+                                              "accessed_by":  "Jane Analyst"
+                                          },
+                              "ts_utc":  "2025-08-20T18:02:02",
+                              "prev_hash_hex":  "28e4df2efbbb06b4440dbe0349d0ca1fa6026275fa3bf620dcf778d5b8cdac86",
+                              "entry_hash_hex":  "c4ae3a23a52d804cfbbed894f405f43c4bf1263244564c53ffcd38be2acedb35"
+                          }
+                      ],
+    "total_entries":  4
+}
+
+
+evidence_id          : 1
+evidence_id_str      : Demo PD-2024-001-001
+chain_valid          : False
+total_entries        : 4
+verification_details : {@{entry_id=1; sequence=1; action=EVIDENCE_CREATED; 
+                       ts_utc=2025-08-20T17:54:04; prev_hash_valid=True; entry_hash_valid=False;      
+                       entry_valid=False; expected_prev_hash=; actual_prev_hash=; expected_entry_hash 
+                       =b57ccd5a9f4ef61b9f5145254e90f989ba3116b5e6ee7442c3407f8d128ae45b; actual_entr 
+                       y_hash=b8aabf1b0cc5426381c8cede46a6e7a8947f729a7d2dfef52f0cf928ed7a62c2},      
+                       @{entry_id=2; sequence=2; action=TRANSFER_REQUESTED;
+                       ts_utc=2025-08-20T18:01:21; prev_hash_valid=True; entry_hash_valid=False;      
+                       entry_valid=False; expected_prev_hash=b8aabf1b0cc5426381c8cede46a6e7a8947f729a 
+                       7d2dfef52f0cf928ed7a62c2; actual_prev_hash=b8aabf1b0cc5426381c8cede46a6e7a8947 
+                       f729a7d2dfef52f0cf928ed7a62c2; expected_entry_hash=25dc839b5891c2b3d46e1ed32bd 
+                       1a84468ba263e6604e7e05c31291ba1248696; actual_entry_hash=1b2aba4c35b41a2af25d0 
+                       f8b8703750866d494e01c759fc0eb609c54763f3047}, @{entry_id=3; sequence=3;        
+                       action=TRANSFER_ACCEPTED; ts_utc=2025-08-20T18:01:37; prev_hash_valid=True;    
+                       entry_hash_valid=False; entry_valid=False; expected_prev_hash=1b2aba4c35b41a2a 
+                       f25d0f8b8703750866d494e01c759fc0eb609c54763f3047; actual_prev_hash=1b2aba4c35b 
+                       41a2af25d0f8b8703750866d494e01c759fc0eb609c54763f3047; expected_entry_hash=e3e 
+                       a822b4922b16930cfcf593f8384c3a8f4a4b2d717b699b816c7da89a31e3a; actual_entry_ha 
+                       sh=28e4df2efbbb06b4440dbe0349d0ca1fa6026275fa3bf620dcf778d5b8cdac86},
+                       @{entry_id=4; sequence=4; action=FILE_DOWNLOADED; ts_utc=2025-08-20T18:02:02;  
+                       prev_hash_valid=True; entry_hash_valid=False; entry_valid=False; expected_prev 
+                       _hash=28e4df2efbbb06b4440dbe0349d0ca1fa6026275fa3bf620dcf778d5b8cdac86; actual 
+                       _prev_hash=28e4df2efbbb06b4440dbe0349d0ca1fa6026275fa3bf620dcf778d5b8cdac86; e 
+                       xpected_entry_hash=6ad905e815cfdda26170103875a5f89df65b8f16aedb0980ea66b865ae4 
+                       11cab; actual_entry_hash=c4ae3a23a52d804cfbbed894f405f43c4bf1263244564c53ffcd3 
+                       8be2acedb35}}
+
+
+
+(.venv) PS D:\Chain of custody_new> 
