@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from .core.config import settings
@@ -24,3 +24,14 @@ def get_db():
 def create_tables():
     """Create all database tables"""
     Base.metadata.create_all(bind=engine)
+    # Lightweight migration: add 'evidence_name' if missing
+    try:
+        insp = inspect(engine)
+        cols = [c['name'] for c in insp.get_columns('evidence')]
+        if 'evidence_name' not in cols:
+            with engine.begin() as conn:
+                # SQLite supports adding nullable columns without default
+                conn.execute(text("ALTER TABLE evidence ADD COLUMN evidence_name VARCHAR(200)"))
+    except Exception:
+        # Avoid breaking startup if introspection fails
+        pass

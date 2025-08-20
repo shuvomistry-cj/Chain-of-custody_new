@@ -68,6 +68,7 @@ async def create_evidence(
     location: str = Form(...),
     collected_at: str = Form(...),
     description: str = Form(...),
+    evidence_name: Optional[str] = Form(None),
     files: List[UploadFile] = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -120,6 +121,7 @@ async def create_evidence(
     # Create evidence record
     evidence = Evidence(
         evidence_id_str=evidence_id_str,
+        evidence_name=evidence_name,
         agency=agency,
         case_no=case_no,
         offense=offense,

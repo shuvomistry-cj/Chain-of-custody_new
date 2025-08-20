@@ -9,6 +9,7 @@ class Evidence(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     evidence_id_str = Column(String(100), unique=True, index=True, nullable=False)
+    evidence_name = Column(String(200), nullable=True)
     agency = Column(String(100), nullable=False)
     case_no = Column(String(50), nullable=False, unique=True)
     offense = Column(String(200), nullable=False)

@@ -8,3 +8,5 @@ python-jose[cryptography]
 cryptography
 python-dotenv
 requests
+qrcode
+Pillow

@@ -74,6 +74,7 @@ class APIClient:
         location: str,
         collected_at_iso: str,
         description: str,
+        evidence_name: Optional[str],
         files: List[Tuple[str, bytes, str]],  # (filename, content, mime)
     ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
         url = f"{self.base_url}/evidence/"  # trailing slash
@@ -88,6 +89,8 @@ class APIClient:
             "collected_at": collected_at_iso,
             "description": description,
         }
+        if evidence_name:
+            data["evidence_name"] = evidence_name
         # Multiple files under the same key 'files'
         files_payload = [("files", (fname, content, mime)) for (fname, content, mime) in files]
         resp = requests.post(url, data=data, files=files_payload, headers=self._headers())

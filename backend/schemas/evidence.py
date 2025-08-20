@@ -18,6 +18,7 @@ class EvidenceFileResponse(BaseModel):
 class EvidenceResponse(BaseModel):
     id: int
     evidence_id_str: str
+    evidence_name: Optional[str] = None
     agency: str
     case_no: str
     offense: str
