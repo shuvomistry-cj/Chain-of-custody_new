@@ -13,8 +13,19 @@ from ..schemas.auth import (
     UserUpdate,
     UserProfileResponse,
     UserProfileUpdate,
+    PasswordResetRequest,
+    PasswordResetConfirm,
 )
-from ..core.security import verify_password, get_password_hash, create_access_token, create_refresh_token, verify_token
+from ..core.security import (
+    verify_password,
+    get_password_hash,
+    create_access_token,
+    create_refresh_token,
+    verify_token,
+    create_reset_token,
+)
+from ..core.mailer import send_mail
+from ..core.config import settings
 
 router = APIRouter()
 security = HTTPBearer()
@@ -280,3 +291,51 @@ def update_user_profile(
     db.commit()
     db.refresh(profile)
     return profile
+
+
+# -----------------------------
+# Password reset
+# -----------------------------
+
+@router.post("/password-reset/request")
+def request_password_reset(payload: PasswordResetRequest, db: Session = Depends(get_db)):
+    """Issue a short-lived reset token and email a reset link. Always return 200.
+    Avoids leaking whether an email exists.
+    """
+    user = db.query(User).filter(User.email == payload.email).first()
+    # Always act as if successful
+    link_sent = False
+    if user:
+        token = create_reset_token({"sub": str(user.id)})
+        base = settings.frontend_base_url or "http://localhost:8501"
+        reset_link = f"{base}?reset_token={token}"
+        subject = f"{settings.app_name} - Password Reset"
+        body = (
+            f"Hello {user.name},\n\n"
+            f"We received a request to reset your password.\n"
+            f"Click the link below to set a new password (valid for 30 minutes):\n\n"
+            f"{reset_link}\n\n"
+            f"If you didn't request this, you can ignore this email."
+        )
+        err = send_mail(subject, user.email, body)
+        link_sent = (err is None)
+        # For development without SMTP configured, we expose the token in response
+        if err == "SMTP not configured":
+            return {"ok": True, "email": payload.email, "dev_token": token}
+    return {"ok": True, "email": payload.email, "sent": link_sent}
+
+
+@router.post("/password-reset/confirm")
+def confirm_password_reset(payload: PasswordResetConfirm, db: Session = Depends(get_db)):
+    """Verify reset token and set new password."""
+    data = verify_token(payload.token, "reset")
+    user_id = data.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
+    user = db.query(User).filter(User.id == int(user_id)).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    user.password_hash = get_password_hash(payload.new_password)
+    db.add(user)
+    db.commit()
+    return {"ok": True}

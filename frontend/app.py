@@ -424,17 +424,59 @@ def login_page():
         if ok and data and data.get("access_token"):
             set_token(data["access_token"])
             fetch_me()
-            st.session_state.page = "dashboard"
+            st.session_state.page = "new_dashboard"
             st.success("Logged in successfully.")
             st.rerun()
         else:
             st.error(f"Login failed: {err}")
 
-    # Forgot password (UI-only until backend supports email reset)
+    # Forgot password flow
     with st.expander("Forgot password?"):
         fp_email = st.text_input("Enter your account email", key="fp_email")
         if st.button("Send reset link", key="fp_send"):
-            st.info("Password reset via email requires backend support. Please contact admin or enable the reset endpoints.")
+            with st.spinner("Sending reset link..."):
+                ok, data, err = st.session_state.api.password_reset_request(fp_email)
+            if ok:
+                if isinstance(data, dict) and data.get("dev_token"):
+                    st.info("SMTP not configured. Use this token for testing:")
+                    st.code(data.get("dev_token"))
+                else:
+                    st.success("If the email exists, a reset link has been sent.")
+            else:
+                st.error(f"Failed to request reset: {err}")
+
+    # If the page was opened with a reset token, show confirm form
+    try:
+        q = st.query_params  # Streamlit >=1.31
+        params = dict(q)
+    except Exception:
+        try:
+            params = st.experimental_get_query_params()
+        except Exception:
+            params = {}
+    reset_token = None
+    if isinstance(params, dict):
+        v = params.get("reset_token")
+        # could be list or str depending on API
+        reset_token = v if isinstance(v, str) else (v[0] if isinstance(v, list) and v else None)
+
+    if reset_token:
+        st.markdown("---")
+        st.subheader("Set a new password")
+        with st.form("reset_confirm_form"):
+            new_pw = st.text_input("New password", type="password")
+            new_pw2 = st.text_input("Confirm password", type="password")
+            do_set = st.form_submit_button("Update Password")
+        if do_set:
+            if not new_pw or new_pw != new_pw2:
+                st.error("Passwords do not match.")
+            else:
+                with st.spinner("Updating password..."):
+                    okc, _, errc = st.session_state.api.password_reset_confirm(reset_token, new_pw)
+                if okc:
+                    st.success("Password updated. You can now log in.")
+                else:
+                    st.error(f"Failed to update password: {errc}")
 
     # Immutable footer on login page bottom-left
     st.markdown(
@@ -489,8 +531,8 @@ def sidebar_nav():
             """,
             unsafe_allow_html=True,
         )
-        # Build options without placeholders to avoid duplicate labels
-        options = ["Dashboard"]
+        # Build options with Dashboard first (default)
+        options = ["Dashboard", "Evidence Custody"]
         if role in ("ANALYST", "COLLECTOR", "ADMIN"):
             options.append("Create Evidence")
         # My Profile available for all logged-in users
@@ -503,12 +545,13 @@ def sidebar_nav():
         # Preserve current page selection in the radio
         current_page = st.session_state.page
         page_to_option = {
-            "dashboard": "Dashboard",
+            "dashboard": "Evidence Custody",
+            "new_dashboard": "Dashboard",
             "create": "Create Evidence",
             "my_profile": "My Profile",
             "admin": "Admin Panel",
-            "login": "Dashboard",  # default to Dashboard when logged in
-            "evidence_detail": "Dashboard",  # keep sidebar on Dashboard when viewing details
+            "login": "Dashboard",  # default selection after login
+            "evidence_detail": "Evidence Custody",  # keep sidebar on Evidence Custody when viewing details
         }
         try:
             current_label = page_to_option.get(current_page, "Dashboard")
@@ -520,7 +563,9 @@ def sidebar_nav():
 
         # Only change page if selection differs from current mapped page
         # Do NOT override when currently on evidence_detail (navigated via buttons)
-        if choice == "Dashboard" and current_page not in ("dashboard", "evidence_detail"):
+        if choice == "Dashboard" and current_page != "new_dashboard":
+            st.session_state.page = "new_dashboard"
+        elif choice == "Evidence Custody" and current_page not in ("dashboard", "evidence_detail"):
             st.session_state.page = "dashboard"
         elif choice == "Create Evidence" and role in ("ANALYST", "COLLECTOR", "ADMIN") and current_page != "create":
             st.session_state.page = "create"
@@ -543,7 +588,16 @@ def sidebar_nav():
             with st.expander("Password reset"):
                 pr_email = st.text_input("Email", value=str(user.get("email") or ""), key="pr_email")
                 if st.button("Send reset link", key="pr_send"):
-                    st.info("Password reset via email requires backend support. Please contact admin or enable the reset endpoints.")
+                    with st.spinner("Sending reset link..."):
+                        okr, datar, errr = st.session_state.api.password_reset_request(pr_email)
+                    if okr:
+                        if isinstance(datar, dict) and datar.get("dev_token"):
+                            st.info("SMTP not configured. Use this token for testing:")
+                            st.code(datar.get("dev_token"))
+                        else:
+                            st.success("If the email exists, a reset link has been sent.")
+                    else:
+                        st.error(f"Failed to request reset: {errr}")
 
         # Immutable signature footer pinned to bottom-left
         st.markdown(
@@ -566,7 +620,7 @@ def dashboard_page():
     if not require_login():
         return
 
-    st.title("Dashboard")
+    st.title("Evidence Custody")
     apply_base_styles()
 
     # List my custody evidence
@@ -1235,11 +1289,6 @@ def admin_page():
     else:
         st.error(f"Failed to load evidence: {err}")
 
-
-# ------------------------------
-# Main routing
-# ------------------------------
-
 def main():
     st.set_page_config(page_title="Chain of Custody", layout="wide")
     init_state()
@@ -1276,6 +1325,8 @@ def main():
         # Page content
         if cur == "dashboard":
             dashboard_page()
+        elif cur == "new_dashboard":
+            new_dashboard_page()
         elif cur == "evidence_detail":
             evidence_detail_page()
         elif cur == "create":
@@ -1290,6 +1341,187 @@ def main():
             my_profile_page()
         else:
             dashboard_page()
+
+
+def new_dashboard_page():
+    if not require_login():
+        return
+    apply_base_styles()
+    st.title("Dashboard")
+
+    # Load evidence list once
+    with st.spinner("Loading data..."):
+        ok, data, err = st.session_state.api.list_evidence(page=1, per_page=200)
+    if not ok:
+        st.error(f"Failed to load evidence: {err}")
+        return
+    items = data.get("items", []) if isinstance(data, dict) else []
+    user = st.session_state.user or {}
+    uid = user.get("id")
+
+    # Metrics (per definitions):
+    # - Total Custody: number of evidence items ever under this user's custody (any time)
+    # - Total Analysis: number of analyses created by this user
+    # - Current Custody: evidence items currently under this user's custody
+    current_custody = sum(1 for ev in items if ev and ev.get("current_custodian_id") == uid)
+
+    # Total Analysis: count only where analysis_by appears to match this user (best-effort)
+    user_name = (user.get("name") or "").strip().lower()
+    user_email = (user.get("email") or "").strip().lower()
+    total_analysis = 0
+    max_check = min(len(items), 50)  # limit to avoid slow UI
+    for ev in items[:max_check]:
+        try:
+            ok_a, ares, _ = st.session_state.api.list_analyses(int(ev.get("id")))
+            if ok_a and isinstance(ares, dict):
+                alist = ares.get("items") or ares.get("analyses") or []
+                for a in alist:
+                    by = str(a.get("analysis_by") or "").strip().lower()
+                    if by and (by == user_name or by == user_email):
+                        total_analysis += 1
+        except Exception:
+            pass
+    if len(items) > max_check:
+        hint = f"(first {max_check} evidence)"
+    else:
+        hint = ""
+
+    # Total Custody (ever): based on audit entries
+    def _norm(s: str | None) -> str:
+        return (s or "").strip().lower()
+
+    total_custody = 0
+    for ev in items:
+        try:
+            # Count immediately if currently a custodian
+            if ev.get("current_custodian_id") == uid:
+                total_custody += 1
+                continue
+            ok_aud, audit_data, _ = st.session_state.api.get_audit(int(ev.get("id")))
+            if not ok_aud or not isinstance(audit_data, dict):
+                continue
+            entries = audit_data.get("audit_entries") or audit_data.get("entries") or audit_data.get("items") or []
+            held = False
+            for e in entries:
+                if not isinstance(e, dict):
+                    continue
+                action = str(e.get("action") or "").upper()
+                details = e.get("details") if isinstance(e.get("details"), dict) else {}
+                # If user is the actor on EVIDENCE_CREATED or TRANSFER_ACCEPTED, they gained custody
+                if action in ("EVIDENCE_CREATED", "TRANSFER_ACCEPTED"):
+                    if e.get("actor_user_id") == uid:
+                        held = True
+                        break
+                # Also match by names as a fallback
+                if action == "EVIDENCE_CREATED" and _norm(details.get("created_by")) == _norm(user.get("name")):
+                    held = True
+                    break
+                if action == "TRANSFER_ACCEPTED" and _norm(details.get("to_user")) == _norm(user.get("name")):
+                    held = True
+                    break
+            if held:
+                total_custody += 1
+        except Exception:
+            pass
+
+    # Metric cards
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown(f"<div class='coc-card'><div style='color:#6b7280;font-size:12px'>Total Custody</div><div style='font-size:28px;font-weight:800'>{total_custody}</div></div>", unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"<div class='coc-card'><div style='color:#6b7280;font-size:12px'>Total Analysis {hint}</div><div style='font-size:28px;font-weight:800'>{total_analysis}</div></div>", unsafe_allow_html=True)
+    with c3:
+        st.markdown(f"<div class='coc-card'><div style='color:#6b7280;font-size:12px'>Current Custody</div><div style='font-size:28px;font-weight:800'>{current_custody}</div></div>", unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.subheader("Custody history (you)")
+
+    # Build table with full custody intervals for this user across all evidence using audit actions
+    rows = []
+    for ev in items:
+        ev_id = ev.get("id")
+        ev_label = ev.get("evidence_name") or ev.get("evidence_id_str") or f"ID {ev_id}"
+        current_cust = ev.get("current_custodian_name") or "—"
+        # Fetch audit and derive ALL intervals where this user had custody
+        try:
+            ok_a, audit_data, _ = st.session_state.api.get_audit(int(ev_id))
+        except Exception:
+            ok_a, audit_data = False, None
+        if not ok_a or not isinstance(audit_data, dict):
+            continue
+        entries = audit_data.get("audit_entries") or audit_data.get("entries") or audit_data.get("items") or []
+        # Normalize only the relevant events
+        norm = []
+        for e in entries:
+            if not isinstance(e, dict):
+                continue
+            d = e.get("details") if isinstance(e.get("details"), dict) else {}
+            action = str(e.get("action") or "").upper()
+            ts = e.get("ts_utc") or d.get("ts_utc")
+            if action == "TRANSFER_ACCEPTED":
+                norm.append({
+                    "ts": ts,
+                    "from_name": d.get("from_user"),
+                    "to_name": d.get("to_user"),
+                    "action": action,
+                })
+            elif action == "EVIDENCE_CREATED":
+                # Treat creation as transfer from System -> created_by
+                norm.append({
+                    "ts": ts,
+                    "from_name": "System",
+                    "to_name": d.get("created_by"),
+                    "action": action,
+                })
+        # Sort by timestamp asc
+        def _parse_ts(t):
+            if not t:
+                return datetime.min.replace(tzinfo=timezone.utc)
+            try:
+                return datetime.fromisoformat(str(t).replace("Z", "+00:00"))
+            except Exception:
+                return datetime.min.replace(tzinfo=timezone.utc)
+        norm.sort(key=lambda x: _parse_ts(x.get("ts")))
+
+        # Walk transitions for this user by name
+        uname = _norm(user.get("name"))
+        current_start = None
+        current_from_name = None
+        for e in norm:
+            # Gain custody when to_name matches
+            if _norm(e.get("to_name")) == uname:
+                current_start = e.get("ts")
+                current_from_name = e.get("from_name")
+            # Lose custody when from_name matches and we have an open window
+            if _norm(e.get("from_name")) == uname and current_start:
+                rec_s = _format_ts(current_start)
+                tr_s = _format_ts(e.get("ts"))
+                rows.append({
+                    "Evidence": ev_label,
+                    "Received At": rec_s,
+                    "From": current_from_name or "—",
+                    "Transferred At": tr_s,
+                    "To": e.get("to_name") or "—",
+                    "Current Custodian": current_cust,
+                })
+                current_start = None
+                current_from_name = None
+        # If still holding at end, add open interval
+        if current_start:
+            rec_s = _format_ts(current_start)
+            rows.append({
+                "Evidence": ev_label,
+                "Received At": rec_s,
+                "From": current_from_name or "—",
+                "Transferred At": "Present",
+                "To": "—",
+                "Current Custodian": current_cust,
+            })
+
+    if not rows:
+        st.info("No custody history found for your account.")
+    else:
+        st.table(rows)
 
 def my_profile_page():
     if not require_login():

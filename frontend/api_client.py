@@ -52,6 +52,16 @@ class APIClient:
         resp = requests.get(url, headers=self._headers())
         return self._handle(resp)
 
+    def password_reset_request(self, email: str) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+        url = f"{self.base_url}/auth/password-reset/request"
+        resp = requests.post(url, json={"email": email}, headers=self._headers({"Content-Type": "application/json"}))
+        return self._handle(resp)
+
+    def password_reset_confirm(self, token: str, new_password: str) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+        url = f"{self.base_url}/auth/password-reset/confirm"
+        resp = requests.post(url, json={"token": token, "new_password": new_password}, headers=self._headers({"Content-Type": "application/json"}))
+        return self._handle(resp)
+
     # ---------- evidence ----------
     def list_evidence(self, page: int = 1, per_page: int = 20) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
         url = f"{self.base_url}/evidence/"  # trailing slash avoids redirect/auth loss

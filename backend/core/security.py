@@ -59,3 +59,15 @@ def verify_token(token: str, token_type: str = "access") -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials"
         )
+
+
+def create_reset_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """Create a JWT password reset token with short expiry."""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        # 30 minutes default for reset links
+        expire = datetime.utcnow() + timedelta(minutes=30)
+    to_encode.update({"exp": expire, "type": "reset"})
+    return jwt.encode(to_encode, settings.secret_key, algorithm=settings.jwt_alg)

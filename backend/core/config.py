@@ -25,6 +25,21 @@ class Settings(BaseSettings):
         "text/plain"
     ]
 
+    # Optional email settings for password reset
+    smtp_host: str | None = None
+    smtp_port: int | None = None
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_use_tls: bool = True
+    mail_from: str | None = None
+
+    # Frontend base URL to build reset links (e.g., http://localhost:8501)
+    frontend_base_url: str | None = None
+
+    # Formspree (optional alternative to SMTP)
+    formspree_form_id: str | None = None
+    formspree_api_key: str | None = None
+
     # Pydantic v2 settings
     model_config = SettingsConfigDict(env_file=".env")
 
