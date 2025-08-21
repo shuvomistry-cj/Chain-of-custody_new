@@ -153,14 +153,67 @@ class APIClient:
         return self._handle(resp)
 
     # ---------- admin ----------
-    def register_user(self, name: str, email: str, role: str, password: str) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+    def register_user(
+        self,
+        name: str,
+        email: str,
+        role: str,
+        password: str,
+        organization: Optional[str] = None,
+        department: Optional[str] = None,
+        employee_id: Optional[str] = None,
+        national_id: Optional[str] = None,
+        authorised_by: Optional[str] = None,
+        photo_url: Optional[str] = None,
+    ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
         url = f"{self.base_url}/auth/register"
-        payload = {"name": name, "email": email, "role": role, "password": password}
+        payload: Dict[str, Any] = {
+            "name": name,
+            "email": email,
+            "role": role,
+            "password": password,
+        }
+        # Include optional fields only if provided
+        if organization is not None:
+            payload["organization"] = organization
+        if department is not None:
+            payload["department"] = department
+        if employee_id is not None:
+            payload["employee_id"] = employee_id
+        if national_id is not None:
+            payload["national_id"] = national_id
+        if authorised_by is not None:
+            payload["authorised_by"] = authorised_by
+        if photo_url is not None:
+            payload["photo_url"] = photo_url
         resp = requests.post(url, json=payload, headers=self._headers({"Content-Type": "application/json"}))
         return self._handle(resp)
 
     def get_users(self) -> Tuple[bool, Optional[List[Dict[str, Any]]], Optional[str]]:
         url = f"{self.base_url}/auth/users"
+        resp = requests.get(url, headers=self._headers())
+        return self._handle(resp)
+
+    def update_user(self, user_id: int, role: str) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+        """ADMIN: update limited user fields. Currently supports role changes only."""
+        url = f"{self.base_url}/auth/users/{user_id}"
+        payload = {"role": role}
+        resp = requests.patch(url, json=payload, headers=self._headers({"Content-Type": "application/json"}))
+        return self._handle(resp)
+
+    # ---------- profiles ----------
+    def get_user_profile(self, user_id: int) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+        url = f"{self.base_url}/auth/users/{user_id}/profile"
+        resp = requests.get(url, headers=self._headers())
+        return self._handle(resp)
+
+    def update_user_profile(self, user_id: int, profile: Dict[str, Any]) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+        url = f"{self.base_url}/auth/users/{user_id}/profile"
+        resp = requests.patch(url, json=profile, headers=self._headers({"Content-Type": "application/json"}))
+        return self._handle(resp)
+
+    def get_my_profile(self) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+        url = f"{self.base_url}/auth/me/profile"
         resp = requests.get(url, headers=self._headers())
         return self._handle(resp)
 

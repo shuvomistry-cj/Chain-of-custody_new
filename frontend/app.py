@@ -99,6 +99,14 @@ def apply_base_styles():
         .page-footer { position: fixed; bottom: 12px; left: 12px; font-size: 12px; color:#6b7280; line-height:1.2; z-index: 999; }
         .page-footer a { color:#6b7280; text-decoration: none; }
         .page-footer a:hover { text-decoration: underline; }
+
+        /* Avatar circle */
+        .avatar { width: 48px; height: 48px; border-radius: 999px; object-fit: cover; border: 1px solid #e5e7eb; }
+        .avatar-lg { width: 72px; height: 72px; border-radius: 999px; object-fit: cover; border: 1px solid #e5e7eb; }
+        .profile-card { background:#ffffff; border:1px solid #e5e7eb; border-radius: 12px; padding: 1rem; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+        .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; }
+        .field { font-size:12px; color:#6b7280; }
+        .value { font-weight:600; color:#111827; padding:.6rem .75rem; border:1px solid #eef2f7; background:#f8fafc; border-radius:8px; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -116,10 +124,52 @@ def init_state():
         st.session_state.access_token = None
     if "user" not in st.session_state:
         st.session_state.user = None
+
     if "page" not in st.session_state:
         st.session_state.page = "login"
     if "evidence_id" not in st.session_state:
         st.session_state.evidence_id = None
+    # Navigation history for Back button
+    if "page_history" not in st.session_state:
+        st.session_state.page_history = []
+    if "_last_page" not in st.session_state:
+        st.session_state._last_page = "login"
+
+    # Ensure API client is current (hot-reload safe). If the APIClient in session
+    # is from an older code version and missing new methods, recreate it and
+    # preserve the access token so the user stays logged in.
+    try:
+        api_obj = st.session_state.api
+        needs_reload = not all([
+            hasattr(api_obj, "update_user"),
+            hasattr(api_obj, "get_user_profile"),
+            hasattr(api_obj, "update_user_profile"),
+            hasattr(api_obj, "get_my_profile"),
+        ])
+    except Exception:
+        needs_reload = True
+    if needs_reload:
+        token = st.session_state.get("access_token")
+        st.session_state.api = APIClient()
+        if token:
+            st.session_state.access_token = token
+            st.session_state.api.access_token = token
+
+def _file_to_data_url(uploaded) -> str | None:
+    """Convert an uploaded file to data URL (base64) for storage in photo_url.
+    Returns None if uploaded is falsy or on error.
+    """
+    try:
+        if not uploaded:
+            return None
+        data = uploaded.read()
+        if not data:
+            return None
+        mime = uploaded.type or "image/jpeg"
+        b64 = base64.b64encode(data).decode()
+        return f"data:{mime};base64,{b64}"
+    except Exception:
+        return None
 
 def _qr_bytes_for_evidence(ev: dict) -> bytes:
     if not QR_AVAILABLE:
@@ -322,6 +372,38 @@ def fetch_me():
 
 
 # ------------------------------
+# Top-right controls: Back and Reload
+# ------------------------------
+
+def _navigate_back():
+    hist = st.session_state.get("page_history") or []
+    if hist:
+        target = hist.pop()  # last page
+        # clean up context when backing to dashboard
+        if target == "dashboard":
+            st.session_state.evidence_id = None
+        st.session_state.page = target
+        st.rerun()
+    else:
+        # Fallbacks: from detail -> dashboard; otherwise stay
+        if st.session_state.page == "evidence_detail":
+            st.session_state.page = "dashboard"
+            st.session_state.evidence_id = None
+            st.rerun()
+
+
+def render_top_controls():
+    # Right-aligned Back and Reload buttons
+    c1, c2, c3 = st.columns([8, 1, 1])
+    with c2:
+        if st.button("↶ Back", key="nav_back"):
+            _navigate_back()
+    with c3:
+        if st.button("⟳ Reload", key="nav_reload"):
+            st.rerun()
+
+
+# ------------------------------
 # UI Sections
 # ------------------------------
 
@@ -348,6 +430,12 @@ def login_page():
         else:
             st.error(f"Login failed: {err}")
 
+    # Forgot password (UI-only until backend supports email reset)
+    with st.expander("Forgot password?"):
+        fp_email = st.text_input("Enter your account email", key="fp_email")
+        if st.button("Send reset link", key="fp_send"):
+            st.info("Password reset via email requires backend support. Please contact admin or enable the reset endpoints.")
+
     # Immutable footer on login page bottom-left
     st.markdown(
         """
@@ -371,10 +459,42 @@ def sidebar_nav():
 
     with st.sidebar:
         st.header("Navigation")
+        # User identity header with avatar
+        user = st.session_state.user or {}
+        prof_photo = None
+        try:
+            okp, prof, _ = st.session_state.api.get_my_profile()
+            if okp and isinstance(prof, dict):
+                prof_photo = prof.get("photo_url")
+        except Exception:
+            prof_photo = None
+        # Render identity block
+        avatar_html = ""
+        if prof_photo:
+            avatar_html = f"<img src='{prof_photo}' class='avatar' alt='avatar'/>"
+        else:
+            # Placeholder circle (initial)
+            initial = (user.get("name") or "?")[:1].upper()
+            avatar_html = f"<div class='avatar' style='display:flex;align-items:center;justify-content:center;background:#eef2ff;color:#4338ca;font-weight:700;'>{initial}</div>"
+        st.markdown(
+            f"""
+            <div class='profile-card' style='display:flex;gap:.75rem;align-items:center;margin-bottom:.75rem;'>
+              {avatar_html}
+              <div>
+                <div style='font-weight:700'>{user.get('name') or ''}</div>
+                <div style='font-size:12px;color:#6b7280'>ID: {user.get('id') or '—'} • {str((user.get('role') or '')).upper()}</div>
+                <div style='font-size:12px;color:#6b7280'>{user.get('email') or ''}</div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         # Build options without placeholders to avoid duplicate labels
         options = ["Dashboard"]
         if role in ("ANALYST", "COLLECTOR", "ADMIN"):
             options.append("Create Evidence")
+        # My Profile available for all logged-in users
+        options.append("My Profile")
         if role == "ADMIN":
             options.append("Admin Panel")
             options.append("User List")
@@ -385,6 +505,7 @@ def sidebar_nav():
         page_to_option = {
             "dashboard": "Dashboard",
             "create": "Create Evidence",
+            "my_profile": "My Profile",
             "admin": "Admin Panel",
             "login": "Dashboard",  # default to Dashboard when logged in
             "evidence_detail": "Dashboard",  # keep sidebar on Dashboard when viewing details
@@ -403,6 +524,8 @@ def sidebar_nav():
             st.session_state.page = "dashboard"
         elif choice == "Create Evidence" and role in ("ANALYST", "COLLECTOR", "ADMIN") and current_page != "create":
             st.session_state.page = "create"
+        elif choice == "My Profile" and current_page != "my_profile":
+            st.session_state.page = "my_profile"
         elif choice == "Admin Panel" and role == "ADMIN" and current_page != "admin":
             st.session_state.page = "admin"
         elif choice == "User List" and role == "ADMIN" and current_page != "users":
@@ -417,7 +540,10 @@ def sidebar_nav():
 
         st.markdown("---")
         if user:
-            st.caption(f"Logged in as: {user.get('name')} ({role})")
+            with st.expander("Password reset"):
+                pr_email = st.text_input("Email", value=str(user.get("email") or ""), key="pr_email")
+                if st.button("Send reset link", key="pr_send"):
+                    st.info("Password reset via email requires backend support. Please contact admin or enable the reset endpoints.")
 
         # Immutable signature footer pinned to bottom-left
         st.markdown(
@@ -451,6 +577,11 @@ def dashboard_page():
         return
 
     items = data.get("items", []) if isinstance(data, dict) else []
+    # Show only evidence where current user is the current custodian
+    user = st.session_state.user or {}
+    uid = user.get("id")
+    if uid is not None:
+        items = [ev for ev in items if ev and ev.get("current_custodian_id") == uid]
 
     st.subheader("My Custody Evidence")
     if not items:
@@ -580,6 +711,14 @@ def dashboard_page():
                         st.rerun()
                     else:
                         st.error(f"Failed: {err}")
+            with cols[3]:
+                if st.button("Reject", key=f"rej_{t.get('id')}"):
+                    okr, _, errr = st.session_state.api.reject_transfer(int(t.get("id")))
+                    if okr:
+                        st.warning("Transfer rejected.")
+                        st.rerun()
+                    else:
+                        st.error(f"Failed: {errr}")
 
     st.markdown("---")
     # Outgoing pending transfers (that I initiated)
@@ -625,6 +764,17 @@ def evidence_detail_page():
         st.error(f"Failed to load evidence: {err}")
         return
 
+    # Enforce access: only current custodian can view evidence details
+    curr_user = st.session_state.user or {}
+    is_custodian = (ev.get('current_custodian_id') == curr_user.get('id'))
+    if not is_custodian:
+        st.error("Access denied: You are not the current custodian of this evidence.")
+        if st.button("Back to Dashboard", key="back_no_cust"):
+            st.session_state.page = "dashboard"
+            st.session_state.evidence_id = None
+            st.rerun()
+        return
+
     # Fetch audit to show last audit timestamp on the details card
     last_audit_ts = None
     ok_a, audit, _ = st.session_state.api.get_audit(int(eid))
@@ -660,9 +810,8 @@ def evidence_detail_page():
     st.markdown("**Description**")
     st.write(ev.get("description", ""))
 
-    # Determine custody
+    # Determine custody (already computed above as is_custodian)
     user = st.session_state.user or {}
-    is_custodian = (ev.get('current_custodian_id') == user.get('id'))
 
     # Add Analysis button (aligned under Case No block)
     if is_custodian:
@@ -785,32 +934,35 @@ def evidence_detail_page():
 
     # Request transfer (current custodian only) with searchable user dropdown
     st.subheader("Request Transfer")
-    users_ok, users, users_err = st.session_state.api.get_users()
-    if not users_ok:
-        st.error(f"Failed to load users: {users_err}")
-        users = []
-    # Build label->id mapping
-    options = []
-    label_to_id = {}
-    for u in users or []:
-        label = f"{u.get('name')} ({u.get('email')})"
-        options.append(label)
-        label_to_id[label] = int(u.get('id'))
-    selected = st.selectbox("Recipient", options) if options else None
-    reason = st.text_input("Reason", value="Routine transfer")
-    if st.button("Request Transfer"):
-        if not selected:
-            st.error("Please select a recipient.")
-        else:
-            to_user_id = label_to_id.get(selected)
-            if not to_user_id:
-                st.error("Invalid recipient selection.")
+    if is_custodian:
+        users_ok, users, users_err = st.session_state.api.get_users()
+        if not users_ok:
+            st.error(f"Failed to load users: {users_err}")
+            users = []
+        # Build label->id mapping
+        options = []
+        label_to_id = {}
+        for u in users or []:
+            label = f"{u.get('name')} ({u.get('email')})"
+            options.append(label)
+            label_to_id[label] = int(u.get('id'))
+        selected = st.selectbox("Recipient", options) if options else None
+        reason = st.text_input("Reason", value="Routine transfer")
+        if st.button("Request Transfer"):
+            if not selected:
+                st.error("Please select a recipient.")
             else:
-                ok, res, err = st.session_state.api.request_transfer(int(eid), int(to_user_id), reason)
-                if ok:
-                    st.success("Transfer requested.")
+                to_user_id = label_to_id.get(selected)
+                if not to_user_id:
+                    st.error("Invalid recipient selection.")
                 else:
-                    st.error(f"Failed to request transfer: {err}")
+                    ok, res, err = st.session_state.api.request_transfer(int(eid), int(to_user_id), reason)
+                    if ok:
+                        st.success("Transfer requested.")
+                    else:
+                        st.error(f"Failed to request transfer: {err}")
+    else:
+        st.caption("Only the current custodian can request a transfer.")
 
     # Audit log timeline
     st.subheader("Audit Log")
@@ -878,8 +1030,73 @@ def user_list_page():
         st.info("No users found.")
         return
     for u in users:
+        uid = str(u.get('id'))
         with st.container():
-            st.markdown(f"**{u.get('name')}** — {u.get('email')} | Role: {u.get('role')} | ID: {u.get('id')}")
+            # Header with edit icon on the right
+            h_l, h_r = st.columns([8, 1])
+            with h_l:
+                st.markdown(f"**{u.get('name')}** — {u.get('email')} | Role: {u.get('role')} | ID: {u.get('id')}")
+            with h_r:
+                if role == "ADMIN":
+                    if st.button("✏️", key=f"edit_icon_{uid}"):
+                        st.session_state[f"edit_user_{uid}"] = not st.session_state.get(f"edit_user_{uid}", False)
+            # Edit panel toggled by icon
+            if st.session_state.get(f"edit_user_{uid}", False):
+                if role != "ADMIN":
+                    st.warning("Only admins can edit users.")
+                else:
+                    # Fetch profile to prefill fields
+                    prof_org = prof_dept = prof_emp = prof_nid = prof_auth = prof_photo = ""
+                    with st.spinner("Loading profile..."):
+                        okp, profile, perr = st.session_state.api.get_user_profile(int(uid))
+                    if okp and isinstance(profile, dict):
+                        prof_org = profile.get("organization") or ""
+                        prof_dept = profile.get("department") or ""
+                        prof_emp = profile.get("employee_id") or ""
+                        prof_nid = profile.get("national_id") or ""
+                        prof_auth = profile.get("authorised_by") or ""
+                        prof_photo = profile.get("photo_url") or ""
+                    with st.form(f"edit_form_{uid}"):
+                        # Uneditable fields
+                        st.text_input("Name", value=str(u.get('name') or ''), disabled=True, key=f"name_{uid}")
+                        st.text_input("Email", value=str(u.get('email') or ''), disabled=True, key=f"email_{uid}")
+                        st.text_input("National ID No", value=prof_nid, disabled=False, key=f"nid_{uid}")
+                        # Other fields (persist via profile API)
+                        st.text_input("Organization Name", value=prof_org, key=f"org_{uid}")
+                        st.text_input("Department Name", value=prof_dept, key=f"dept_{uid}")
+                        st.text_input("Employee ID (Org ID)", value=prof_emp, key=f"emp_{uid}")
+                        st.text_input("Authorised By", value=prof_auth, key=f"authby_{uid}")
+                        st.text_input("Photo URL (optional)", value=prof_photo, key=f"photo_url_{uid}")
+                        photo_upload = st.file_uploader("Upload/Replace Photo", type=["png","jpg","jpeg"], accept_multiple_files=False, key=f"photo_upload_{uid}")
+                        st.selectbox(
+                            "Role",
+                            ["ADMIN", "AUDITOR", "ANALYST", "COLLECTOR"],
+                            index=["ADMIN","AUDITOR","ANALYST","COLLECTOR"].index(str(u.get('role') or 'COLLECTOR')),
+                            key=f"role_{uid}"
+                        )
+                        st.caption("Admin cannot change or reset passwords here.")
+                        submitted = st.form_submit_button("Save")
+                    if submitted:
+                        # Persist role
+                        new_role = st.session_state.get(f"role_{uid}")
+                        role_ok, _, role_err = st.session_state.api.update_user(int(uid), str(new_role))
+                        # Persist profile fields
+                        photo_data_url = _file_to_data_url(st.session_state.get(f"photo_upload_{uid}"))
+                        profile_payload = {
+                            "organization": st.session_state.get(f"org_{uid}") or None,
+                            "department": st.session_state.get(f"dept_{uid}") or None,
+                            "employee_id": st.session_state.get(f"emp_{uid}") or None,
+                            "national_id": st.session_state.get(f"nid_{uid}") or None,
+                            "authorised_by": st.session_state.get(f"authby_{uid}") or None,
+                            "photo_url": photo_data_url or (st.session_state.get(f"photo_url_{uid}") or None),
+                        }
+                        prof_ok, _, prof_err = st.session_state.api.update_user_profile(int(uid), profile_payload)
+                        if role_ok and prof_ok:
+                            st.success("User updated.")
+                            st.rerun()
+                        else:
+                            err_msg = "; ".join([e for e in [role_err, prof_err] if e]) or "Update failed"
+                            st.error(f"Failed to update: {err_msg}")
 
 
 def create_evidence_page():
@@ -975,13 +1192,34 @@ def admin_page():
 
     st.subheader("Create User")
     with st.form("create_user_form"):
+        # Required (supported by backend)
         name = st.text_input("Name")
         email = st.text_input("Email")
+        org = st.text_input("Organization Name")
+        dept = st.text_input("Department Name")
+        emp_id = st.text_input("Employee ID (Org ID)")
+        nat_id = st.text_input("National ID No")
+        auth_by = st.text_input("Authorised By")
+        photo_url = st.text_input("Photo URL (optional)")
+        photo_upload_new = st.file_uploader("Upload Photo (optional)", type=["png","jpg","jpeg"], accept_multiple_files=False)
         role = st.selectbox("Role", ["ADMIN", "AUDITOR", "ANALYST", "COLLECTOR"])
         password = st.text_input("Password", type="password")
+        st.caption("Tip: Uploading a photo will embed it as a data URL.")
         sub = st.form_submit_button("Create User")
     if sub:
-        ok, res, err = st.session_state.api.register_user(name, email, role, password)
+        photo_data_url = _file_to_data_url(photo_upload_new)
+        ok, res, err = st.session_state.api.register_user(
+            name=name,
+            email=email,
+            role=role,
+            password=password,
+            organization=org or None,
+            department=dept or None,
+            employee_id=emp_id or None,
+            national_id=nat_id or None,
+            authorised_by=auth_by or None,
+            photo_url=photo_data_url or (photo_url or None),
+        )
         if ok:
             st.success(f"User created: {res.get('name')} ({res.get('role')})")
         else:
@@ -1014,22 +1252,98 @@ def main():
     if page != "login" and not st.session_state.user and st.session_state.access_token:
         fetch_me()
 
+    # Routing
     if page == "login":
         login_page()
     else:
+        # Show sidebar and allow it to change current page
         sidebar_nav()
-        if st.session_state.page == "dashboard":
+
+        # Update page history if page changed since last render
+        prev = st.session_state.get("_last_page")
+        cur = st.session_state.page
+        if prev and prev != cur and prev != "login":
+            hist = st.session_state.get("page_history", [])
+            if not hist or hist[-1] != prev:
+                hist.append(prev)
+                st.session_state.page_history = hist
+        # Set last page marker
+        st.session_state._last_page = cur
+
+        # Render top-right controls on authenticated pages
+        render_top_controls()
+
+        # Page content
+        if cur == "dashboard":
             dashboard_page()
-        elif st.session_state.page == "evidence_detail":
+        elif cur == "evidence_detail":
             evidence_detail_page()
-        elif st.session_state.page == "create":
+        elif cur == "create":
             create_evidence_page()
-        elif st.session_state.page == "admin":
+        elif cur == "admin":
             admin_page()
-        elif st.session_state.page == "users":
+        elif cur == "users":
             user_list_page()
+        elif cur == "account":
+            account_page()
+        elif cur == "my_profile":
+            my_profile_page()
         else:
             dashboard_page()
+
+def my_profile_page():
+    if not require_login():
+        return
+    st.title("My Profile")
+    apply_base_styles()
+    with st.spinner("Loading my profile..."):
+        okp, profile, err = st.session_state.api.get_my_profile()
+    if not okp:
+        st.error(f"Failed to load profile: {err}")
+        return
+    u = st.session_state.user or {}
+    photo = (profile or {}).get("photo_url")
+    avatar_html = f"<img src='{photo}' class='avatar-lg' alt='avatar'/>" if photo else ""
+    if not avatar_html:
+        initial = (u.get("name") or "?")[:1].upper()
+        avatar_html = f"<div class='avatar-lg' style='display:flex;align-items:center;justify-content:center;background:#eef2ff;color:#4338ca;font-weight:800;'>{initial}</div>"
+
+    # Header card
+    st.markdown(
+        f"""
+        <div class='profile-card' style='margin-bottom: 1rem;'>
+          <div style='display:flex;align-items:center;justify-content:space-between;'>
+            <div style='display:flex;gap:12px;align-items:center;'>
+              {avatar_html}
+              <div>
+                <div style='font-weight:700;font-size:18px'>{u.get('name') or ''}</div>
+                <div style='color:#6b7280;font-size:12px'>{u.get('email') or ''}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Details grid
+    def _item(label, value):
+        return f"<div><div class='field'>{label}</div><div class='value'>{value or '—'}</div></div>"
+
+    grid_html = (
+        _item("User ID", str(u.get("id"))) +
+        _item("Role", str(u.get("role") or '').upper()) +
+        _item("Organization Name", (profile or {}).get('organization')) +
+        _item("Department Name", (profile or {}).get('department')) +
+        _item("Employee ID (Org ID)", (profile or {}).get('employee_id')) +
+        _item("National ID No", (profile or {}).get('national_id')) +
+        _item("Authorised By", (profile or {}).get('authorised_by'))
+    )
+
+    st.markdown(
+        f"<div class='profile-card'><div class='grid-2'>{grid_html}</div></div>",
+        unsafe_allow_html=True,
+    )
 
 
 if __name__ == "__main__":

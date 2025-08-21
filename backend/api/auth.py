@@ -3,7 +3,17 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models.user import User, UserRole
-from ..schemas.auth import UserRegister, UserLogin, Token, TokenRefresh, UserResponse
+from ..models.user_profile import UserProfile
+from ..schemas.auth import (
+    UserRegister,
+    UserLogin,
+    Token,
+    TokenRefresh,
+    UserResponse,
+    UserUpdate,
+    UserProfileResponse,
+    UserProfileUpdate,
+)
 from ..core.security import verify_password, get_password_hash, create_access_token, create_refresh_token, verify_token
 
 router = APIRouter()
@@ -84,7 +94,28 @@ def register_user(
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    
+
+    # Create profile if any optional fields provided
+    if any([
+        user_data.organization,
+        user_data.department,
+        user_data.employee_id,
+        user_data.national_id,
+        user_data.authorised_by,
+        user_data.photo_url,
+    ]):
+        profile = UserProfile(
+            user_id=db_user.id,
+            organization=user_data.organization,
+            department=user_data.department,
+            employee_id=user_data.employee_id,
+            national_id=user_data.national_id,
+            authorised_by=user_data.authorised_by,
+            photo_url=user_data.photo_url,
+        )
+        db.add(profile)
+        db.commit()
+
     return db_user
 
 
@@ -154,3 +185,98 @@ def list_users(
     """
     users = db.query(User).order_by(User.name.asc()).all()
     return users
+
+
+@router.patch("/users/{user_id}", response_model=UserResponse)
+def update_user(
+    user_id: int,
+    payload: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Update limited user fields (ADMIN only). Currently supports role changes only."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    # Only update fields that exist in the current model
+    if payload.role is not None:
+        user.role = payload.role
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.get("/users/{user_id}/profile", response_model=UserProfileResponse)
+def get_user_profile(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get a user's profile. Admins can view anyone; users can view their own."""
+    if current_user.role != UserRole.ADMIN and current_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+    if not profile:
+        # Return an empty profile shape
+        return UserProfileResponse(
+            user_id=user_id,
+            organization=None,
+            department=None,
+            employee_id=None,
+            national_id=None,
+            authorised_by=None,
+            photo_url=None,
+        )
+    return profile
+
+
+@router.get("/me/profile", response_model=UserProfileResponse)
+def get_my_profile(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
+    if not profile:
+        return UserProfileResponse(
+            user_id=current_user.id,
+            organization=None,
+            department=None,
+            employee_id=None,
+            national_id=None,
+            authorised_by=None,
+            photo_url=None,
+        )
+    return profile
+
+
+@router.patch("/users/{user_id}/profile", response_model=UserProfileResponse)
+def update_user_profile(
+    user_id: int,
+    payload: UserProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Admin: update or create a user's profile."""
+    profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+    if not profile:
+        profile = UserProfile(user_id=user_id)
+        db.add(profile)
+        db.flush()
+
+    if payload.organization is not None:
+        profile.organization = payload.organization
+    if payload.department is not None:
+        profile.department = payload.department
+    if payload.employee_id is not None:
+        profile.employee_id = payload.employee_id
+    if payload.national_id is not None:
+        profile.national_id = payload.national_id
+    if payload.authorised_by is not None:
+        profile.authorised_by = payload.authorised_by
+    if payload.photo_url is not None:
+        profile.photo_url = payload.photo_url
+
+    db.add(profile)
+    db.commit()
+    db.refresh(profile)
+    return profile

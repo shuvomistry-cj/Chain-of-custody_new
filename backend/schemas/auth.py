@@ -9,6 +9,13 @@ class UserRegister(BaseModel):
     email: EmailStr
     role: UserRole
     password: str
+    # Optional profile fields
+    organization: Optional[str] = None
+    department: Optional[str] = None
+    employee_id: Optional[str] = None
+    national_id: Optional[str] = None
+    authorised_by: Optional[str] = None
+    photo_url: Optional[str] = None
 
 
 class UserLogin(BaseModel):
@@ -35,3 +42,26 @@ class UserResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+class UserUpdate(BaseModel):
+    role: Optional[UserRole] = None
+
+
+class UserProfileResponse(BaseModel):
+    user_id: int
+    organization: Optional[str] = None
+    department: Optional[str] = None
+    employee_id: Optional[str] = None
+    national_id: Optional[str] = None
+    authorised_by: Optional[str] = None
+    photo_url: Optional[str] = None
+
+
+class UserProfileUpdate(BaseModel):
+    organization: Optional[str] = None
+    department: Optional[str] = None
+    employee_id: Optional[str] = None
+    national_id: Optional[str] = None
+    authorised_by: Optional[str] = None
+    photo_url: Optional[str] = None

@@ -23,6 +23,12 @@ def get_db():
 
 def create_tables():
     """Create all database tables"""
+    # Import models so they are registered with Base.metadata before create_all
+    try:
+        from .models import user, evidence, transfer, analysis, audit, user_profile  # noqa: F401
+    except Exception:
+        # Avoid failing startup if imports change; create_all will still work for available models
+        pass
     Base.metadata.create_all(bind=engine)
     # Lightweight migration: add 'evidence_name' if missing
     try:
