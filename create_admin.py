@@ -2,9 +2,24 @@
 """
 One-time script to create an admin user
 Usage: python create_admin.py
+
+Non-interactive mode for cloud providers (e.g., Render):
+  Provide these environment variables and run the script once:
+    ADMIN_NAME
+    ADMIN_EMAIL
+    ADMIN_PASSWORD
+
+  Example values you can set on Render:
+    ADMIN_NAME=shuvo
+    ADMIN_EMAIL=shuvo@gmail.com
+    ADMIN_PASSWORD=shuvomitro339
+
+If any of the environment variables are missing, the script will prompt
+interactively (useful for local development).
 """
 import os
 import sys
+from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from backend.db import SessionLocal, create_tables
 from backend.models.user import User, UserRole
@@ -13,6 +28,18 @@ from backend.core.security import get_password_hash
 
 def create_admin_user():
     """Create initial admin user"""
+    # Load environment from local .env
+    try:
+        load_dotenv()
+    except Exception:
+        pass
+    # Load Render Secret File if present
+    try:
+        if os.path.exists("/etc/secrets/admin.env"):
+            load_dotenv("/etc/secrets/admin.env")
+    except Exception:
+        pass
+
     create_tables()
     
     db = SessionLocal()
@@ -23,10 +50,28 @@ def create_admin_user():
             print(f"Admin user already exists: {existing_admin.email}")
             return
         
-        # Get admin details
-        name = input("Admin name: ").strip()
-        email = input("Admin email: ").strip()
-        password = input("Admin password: ").strip()
+        # Try env vars first (non-interactive mode)
+        name = os.getenv("ADMIN_NAME", "").strip()
+        email = os.getenv("ADMIN_EMAIL", "").strip()
+        password = os.getenv("ADMIN_PASSWORD", "").strip()
+
+        # If missing and running non-interactively (e.g., Render), do NOT prompt; exit with message
+        if not all([name, email, password]) and not sys.stdin.isatty():
+            def mask(v: str) -> str:
+                return "<set>" if v else "<missing>"
+            print("Admin seeding (non-interactive) - env var status:")
+            print(f"  ADMIN_NAME: {mask(name)}")
+            print(f"  ADMIN_EMAIL: {mask(email)}")
+            print(f"  ADMIN_PASSWORD: {mask(password)}")
+            print("One or more admin environment variables are missing. Aborting without prompts.")
+            sys.exit(1)
+
+        # If interactive (local), prompt for any missing values
+        if not all([name, email, password]):
+            print("Environment variables not fully provided; falling back to prompts...")
+            name = name or input("Admin name: ").strip()
+            email = email or input("Admin email: ").strip()
+            password = password or input("Admin password: ").strip()
         
         if not all([name, email, password]):
             print("All fields are required!")
