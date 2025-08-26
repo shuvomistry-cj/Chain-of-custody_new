@@ -1,0 +1,158 @@
+Chain of Custody Evidence System — Professional Project Report
+
+1. Introduction
+The Chain of Custody Evidence System is a secure, role-based solution for managing digital and physical evidence records with integrity guarantees. It provides encrypted file storage (AES-256-GCM), immutable hash-chained audit logging, and a two-party transfer handshake to ensure that evidence ownership and custody transitions are provable and tamper-evident. The backend is implemented in Python (FastAPI) with SQLAlchemy and Pydantic, and a minimal Streamlit frontend is provided for user interaction.
+
+2. Goals, Objectives, Vision, Mission
+- Goals: 
+  - Ensure end-to-end integrity and confidentiality of evidence and related files.
+  - Enable traceable, auditable, and compliant custody transfers.
+  - Provide a pragmatic, developer-friendly API and a minimal UI for rapid adoption.
+- Objectives:
+  - Implement robust auth with Argon2id password hashing and JWTs.
+  - Encrypt files at rest using AES-256-GCM with per-file nonces.
+  - Maintain an immutable audit log via hash chaining of entries.
+  - Enforce role-based access control (RBAC) aligned to real workflows.
+- Vision: A trustworthy platform that agencies and labs can adopt to reduce chain-of-custody risk and streamline evidence handling.
+- Mission: Deliver a secure, transparent, and usable system that raises the standard for evidence integrity across investigations and audits.
+
+3. What We Want to Achieve
+- Clear, verifiable custody history for every evidence item.
+- Strong protection of sensitive files stored and transmitted.
+- Operational efficiency through a simple API and UI, minimizing human error in transfers.
+- Extensibility for integrations (LIMS, case management, cloud storage, SIEM).
+
+4. Real-Life Problem and Impact
+- Problem: Evidence mismanagement (lost, tampered, or mishandled evidence) jeopardizes investigations and court admissibility. Manual logs and siloed systems are error-prone and non-verifiable.
+- Impact: 
+  - Tamper-evident logging reduces dispute and improves investigatory and legal defensibility.
+  - Encryption at rest and strict RBAC minimize data exposure risk.
+  - Two-party transfer handshake reduces unauthorized or accidental custody changes.
+
+5. Why This System Is Effective
+- Security by design: Strong cryptography for files; Argon2id for passwords; short-lived, typed JWTs.
+- Verifiable history: Hash-chained audit log provides easy tamper detection.
+- Clear roles and permissions aligned to real duties (Admin, Collector, Analyst, Auditor).
+- Minimal yet complete: Focused primitives reduce complexity while covering critical workflows.
+
+6. Tech Stack and Key Components
+- Languages/Frameworks: Python 3.11, FastAPI, Uvicorn.
+- Data: SQLAlchemy 2.x ORM with SQLite (development); PostgreSQL recommended for production.
+- Schemas: Pydantic v2 for request/response validation.
+- Security/Crypto: cryptography (AES-256-GCM), passlib[argon2], python-jose (JWT), python-dotenv.
+- Frontend: Streamlit app in `frontend/` consuming backend APIs.
+- Notable modules:
+  - `backend/core/crypto.py`: AES-256-GCM file encryption/decryption; nonce + ciphertext + tag layout; SHA-256 computation.
+  - `backend/core/audit.py`: Hash-chained audit entries using canonical JSON; prev hash + canonical entry hashed with SHA-256.
+  - `backend/core/security.py`: Argon2id password hashing; JWT access/refresh/reset token creation and verification.
+
+7. Security Architecture and Controls
+- Authentication: Email/password with Argon2id hashing; JWT tokens with explicit token types (access/refresh/reset) and expiries.
+- Authorization: RBAC tied to JWT claims; endpoints restrict actions to roles (e.g., only current custodian can download files).
+- Data Protection at Rest: AES-256-GCM using an environment-provided 256-bit key (`APP_AES_KEY_BASE64`). Each file uses a unique 12-byte nonce; storage format: `nonce (12) || ciphertext || tag (16)`.
+- Integrity and Non-Repudiation: Hash-chained audit entries; tamper attempts break chain verification.
+- Secrets Management: `.env` configuration (sample in `.env.example`); set unique `SECRET_KEY` and AES key per environment.
+- Session and Token Security: Short-lived access tokens; typed token checks to prevent misuse.
+
+8. Chain of Custody Model — How It’s Built and Secured
+- Evidence creation captures metadata and files; files are encrypted via `encrypt_file_data()` in `crypto.py`. A SHA-256 of plaintext is stored for integrity verification.
+- Transfers use a two-party handshake: one side requests; the other explicitly accepts before custody changes. Only current custodian can download files.
+- Every action (create, download, transfer request/accept) records an audit entry with `create_audit_entry()`; entries include `prev_hash_hex` and `entry_hash_hex`.
+- Auditors can review evidence and audit logs read-only, enabling external or internal oversight without altering state.
+
+9. System Architecture Overview
+- Backend (`backend/`):
+  - `app.py`: FastAPI app wiring routes under `api/` with models and schemas.
+  - `core/`: Security, crypto, audit, and config utilities.
+  - `models/`: SQLAlchemy models (users, evidence, transfers, audit records).
+  - `schemas/`: Pydantic DTOs for validation.
+  - `api/`: Endpoints (`auth`, `evidence`, `transfer`, `audit`).
+  - `storage/`: Encrypted file blobs (gitignored).
+- Frontend (`frontend/`): Streamlit UI in `app.py` with an API client, covering login, dashboard, evidence creation, transfer management, and audit views.
+
+10. Roles and RBAC
+- ADMIN: Manage users; view all evidence.
+- COLLECTOR: Create and view own evidence.
+- ANALYST: Create and view own evidence.
+- AUDITOR: View all evidence and audit logs (read-only).
+
+11. Evidence Lifecycle and Workflow
+- Create evidence: Submit metadata + files; backend encrypts files and stores SHA-256.
+- Custody control: Only current custodian can download; requests for transfer must be accepted to finalize.
+- Audit: Every operation appends a validated, hash-chained entry ensuring traceability.
+
+12. API Surface (Examples)
+- Auth: `/auth/login`, `/auth/register` (admin-only).
+- Evidence: `POST /evidence/`, `GET /evidence/`, `GET /evidence/{id}`, download restricted to current custodian.
+- Transfer: `POST /transfer/request`, `POST /transfer/accept/{id}`, `GET /transfer/pending`.
+- Audit: `GET /audit/{evidence_id}`.
+
+13. Deployment and Operations
+- Dev: SQLite default; run with `uvicorn backend.app:app --reload`.
+- Production recommendations:
+  - Use PostgreSQL, not SQLite; enable HTTPS/TLS; rotate and protect secrets; configure CORS strictly.
+  - Logging/Monitoring: set log rotation; monitor auth failures, custody changes, and audit verification errors.
+  - Backups: secure encrypted file storage and database backups; test restore procedures.
+
+14. Compliance Considerations
+- Alignment: Provides controls supporting evidentiary integrity (auditability, access control, encryption).
+- Not a substitute for policy: Chain-of-custody policies, SOPs, and environmental/physical controls remain necessary for full compliance.
+- Data protection: Ensure jurisdiction-specific data handling, retention, and breach notification compliance.
+
+15. Threat Model (Selected)
+- Stolen database or storage: Encrypted files (AES-256-GCM) reduce exposure; require key management best practices.
+- Token theft: Short-lived tokens; consider IP/device binding and refresh rotation in production.
+- Insider misuse: RBAC + audit trail; regular audit verification and alerts on anomalies recommended.
+- Tampering: Hash chain detects manipulation of audit records.
+
+16. Risks and Mitigations
+- Single key compromise: Use HSM/secret manager; enable key rotation and envelope encryption for larger-scale deployments.
+- SQLite limitations: Migrate to PostgreSQL for concurrency, durability, and replication.
+- Insufficient logging: Add structured logs and SIEM integration for critical events.
+- Availability: Use process supervision, health checks, backups, and possibly redundant instances.
+
+17. Scalability and Performance
+- Scale FastAPI with multiple workers and async I/O; add CDN/object storage for large files.
+- Offload file storage to S3/GCS/Azure Blob with client-side or server-side encryption.
+- Use background tasks for heavy crypto and file processing if needed.
+
+18. Observability and Maintenance
+- Metrics: request rate, latency, error rates by endpoint; transfer success/failure counts; audit verification results.
+- Tracing: Add OpenTelemetry for distributed tracing if integrating multiple services.
+- Alerts: Trigger on repeated auth failures, failed transfers, audit chain breaks, and storage errors.
+
+19. Key Performance Indicators (KPIs)
+- Mean time to complete custody transfer.
+- Percentage of evidence items with fully verified audit chains.
+- Unauthorized access attempts detected and blocked.
+- Encryption/decryption success rate and average latency for file operations.
+
+20. Roadmap (Suggested)
+- Multi-tenant and organization scoping.
+- Admin-configurable retention and legal hold policies.
+- Key rotation and envelope encryption with KMS/HSM support.
+- Fine-grained permissions (object-level ACLs, delegations).
+- External integrations (case management, LIMS, SIEM/SOC, e-signature).
+- Automated audit verification jobs and dashboards.
+
+21. Operational Best Practices
+- Enforce strong `.env` secrets (`SECRET_KEY`, `APP_AES_KEY_BASE64`).
+- Use HTTPS with modern TLS; set secure headers via reverse proxy.
+- Perform regular security reviews and penetration tests.
+- Implement backup, restore drills, and disaster recovery testing.
+
+22. Glossary
+- AES-256-GCM: Authenticated encryption mode providing confidentiality and integrity.
+- Argon2id: Memory-hard password hashing algorithm.
+- JWT: JSON Web Token for stateless auth and claims.
+- Hash chain: Sequence of entries where each includes the previous entry’s hash, enabling tamper detection.
+
+23. References to Code
+- Crypto: `backend/core/crypto.py`
+- Audit: `backend/core/audit.py`
+- Security/JWT/Passwords: `backend/core/security.py`
+- API surface and examples: `README.md` (API Examples, User Roles, Security Features)
+- Environment configuration: `.env.example`
+
+24. Conclusion
+This project delivers the core security and integrity primitives needed for a credible chain-of-custody system. It combines authenticated encryption, robust authentication, strict RBAC, and tamper-evident auditing with a pragmatic API and a minimal UI. With the recommended production hardening steps and roadmap items, it can scale into a compliant, enterprise-ready solution for agencies and labs.

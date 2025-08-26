@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+import os
 import uvicorn
 from .db import create_tables
 from .api import auth, evidence, transfer, audit, analysis
@@ -25,9 +26,17 @@ app = FastAPI(
 )
 
 # CORS middleware
+# CORS configuration: allow local Streamlit by default and optionally configure via env
+# CORS_ORIGINS: comma-separated list of exact origins
+# CORS_ORIGIN_REGEX: regex string for dynamic origins (e.g., ^https://.*\\.streamlit\\.app$)
+cors_origins_env = os.getenv("CORS_ORIGINS", "http://localhost:8501,http://127.0.0.1:8501").strip()
+allow_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+allow_origin_regex = os.getenv("CORS_ORIGIN_REGEX", r"^https://.*\\.streamlit\\.app$").strip()
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8501", "http://127.0.0.1:8501"],
+    allow_origins=allow_origins,
+    allow_origin_regex=allow_origin_regex if allow_origin_regex else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

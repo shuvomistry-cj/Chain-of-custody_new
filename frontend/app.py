@@ -6,6 +6,7 @@ from typing import List, Tuple
 import streamlit as st
 import streamlit.components.v1 as components
 import base64
+import os
 try:
     import qrcode  # type: ignore
     QR_AVAILABLE = True
@@ -119,7 +120,14 @@ def apply_base_styles():
 
 def init_state():
     if "api" not in st.session_state:
-        st.session_state.api = APIClient()
+        # Prefer environment variable for local/dev; try secrets if configured; fallback to localhost
+        api_base = os.getenv("API_BASE_URL")
+        if not api_base:
+            try:
+                api_base = st.secrets["API_BASE_URL"]  # may raise if secrets not set
+            except Exception:
+                api_base = "http://127.0.0.1:8000"
+        st.session_state.api = APIClient(base_url=api_base)
     if "access_token" not in st.session_state:
         st.session_state.access_token = None
     if "user" not in st.session_state:
@@ -150,7 +158,13 @@ def init_state():
         needs_reload = True
     if needs_reload:
         token = st.session_state.get("access_token")
-        st.session_state.api = APIClient()
+        api_base = os.getenv("API_BASE_URL")
+        if not api_base:
+            try:
+                api_base = st.secrets["API_BASE_URL"]
+            except Exception:
+                api_base = "http://127.0.0.1:8000"
+        st.session_state.api = APIClient(base_url=api_base)
         if token:
             st.session_state.access_token = token
             st.session_state.api.access_token = token
